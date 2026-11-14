@@ -1,0 +1,37 @@
+name: Update AdGuard Home China List from Mihomo GeoSite
+
+on:
+  schedule:
+    - cron: '0 19 * * *' # 每天 UTC 19:00 (北京时间 03:00) 自动更新
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch mihomo geosite-cn and convert to AdGuard Home format
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.list" -o cn.list
+          grep -vE '^(#|$|regexp:|full:)' cn.list | sed 's/^\+\.//; s/^/[\//; s/$/\/]https:\/\/doh.pub\/dns-query tls:\/\/dot.pub/' > china.txt.new
+          rm -f cn.list
+          LINES=$(wc -l < china.txt.new)
+          echo "Generated $LINES lines"
+          [ "$LINES" -gt 30000 ] || { echo "Too few lines!"; exit 1; }
+          mv china.txt.new china.txt
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "is-hp-is-mad"
+          git config user.email "is-hp-is-mad@users.noreply.github.com"
+          git add china.txt
+          if git diff --staged --quiet; then
+            echo "No changes."
+          else
+            git commit -m "chore: update china.txt from mihomo geosite-cn ($(date -u +%Y-%m-%d))"
+            git push
+          fi
